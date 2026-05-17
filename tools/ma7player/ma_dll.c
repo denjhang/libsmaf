@@ -257,6 +257,17 @@ int ma_init(ma_context_t* ctx, const char* dll_path, int mode, int sample_rate) 
     }
     ctx->format_id[FORMAT_MMF] = r;
 
+    // Initialize MIDI format
+    r = fn->MaSound_Create(FORMAT_MID);
+    if (r < 0) {
+        fprintf(stderr, "Note: MA DLL does not support MIDI format directly\n");
+        // MIDI is not supported by this MA version
+        ctx->format_id[FORMAT_MID] = -1;
+    } else {
+        ctx->format_id[FORMAT_MID] = r;
+        fprintf(stderr, "MIDI format initialized: %d\n", r);
+    }
+
     ctx->initialized = 1;
     return 0;
 }
@@ -267,8 +278,21 @@ int ma_load(ma_context_t* ctx, int format, const void* data, int size) {
         return -1;
     }
 
-    if (format != FORMAT_MMF) {
-        fprintf(stderr, "Only MMF format supported\n");
+    if (format != FORMAT_MMF && format != FORMAT_MID && format != FORMAT_WAV) {
+        fprintf(stderr, "Unsupported format: %d (MMF=%d, MID=%d, WAV=%d)\n",
+                format, FORMAT_MMF, FORMAT_MID, FORMAT_WAV);
+        return -1;
+    }
+
+    // Check if format was created
+    if (ctx->format_id[format] == 0) {
+        fprintf(stderr, "Format %d not available in this MA DLL\n", format);
+        fprintf(stderr, "Supported formats: MMF(%d)\n", FORMAT_MMF);
+        return -1;
+    }
+
+    if (ctx->format_id[format] == -1) {
+        fprintf(stderr, "Format %d is not supported by this MA chip\n", format);
         return -1;
     }
 

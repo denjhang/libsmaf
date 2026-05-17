@@ -53,6 +53,20 @@ MA-7 DLL (32位)
 ./smaf_play64.exe song.mmf -r 48000 -ma7
 ```
 
+## 支持的格式
+
+| 格式 | 扩展名 | 状态 | 说明 |
+|------|--------|------|------|
+| SMAF/MMF | `.mmf` | ✅ **完全支持** | Yamaha MA芯片主要格式 |
+| MIDI | `.mid`, `.midi` | ❌ **不支持** | MA DLL只支持SMAF/MMF格式 |
+| WAV | `.wav` | ❌ **不支持** | 请使用标准音频播放器 |
+
+> **注意**：如需播放MIDI文件，请先用Yamaha SMAF转换工具或第三方转换器将其转换为MMF格式。
+
+# 指定参数（会传递给helper）
+./smaf_play64.exe song.mmf -r 48000 -ma7
+```
+
 ## 集成到64位项目
 
 ### C/C++集成

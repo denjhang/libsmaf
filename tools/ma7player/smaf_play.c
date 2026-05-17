@@ -127,8 +127,13 @@ int main(int argc, char* argv[]) {
         printf("smaf_play - MMF Player using Yamaha MA DLLs\n");
         printf("Plays MMF files through system audio using Yamaha MA-3/5/7 chip emulation\n\n");
         printf("Usage: %s <input.mmf> [options]\n", argv[0]);
+        printf("\nInput formats supported:\n");
+        printf("  .mmf            SMAF/MA-2/MA-3/MA-5/MA-7 file\n");
+        printf("  .mid/.midi      NOT SUPPORTED (MA DLL only plays SMAF/MMF)\n");
+        printf("  .wav            NOT SUPPORTED (MA DLL only plays SMAF/MMF)\n");
+        printf("\nNote: To play MIDI files, convert them to MMF format first.\n");
         printf("\nOptions:\n");
-        printf("  input.mmf        Input MMF file path\n");
+        printf("  input.mmf       Input MMF file path\n");
         printf("  -r rate          Sample rate in Hz (default: 44100)\n");
         printf("  -dll path        Path to directory containing MA DLLs\n");
         printf("  -ma3/-ma5/-ma7   Force specific MA chip (default: auto-detect MA7)\n");
@@ -259,15 +264,35 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    printf("Loaded MMF: %d bytes\n", mmf_size);
+    // Detect file format from extension
+    const char* ext = strrchr(input_file, '.');
+    int format = FORMAT_MMF;  // Default
+    const char* format_name = "MMF";
 
-    // Parse metadata
-    char title[256] = {0}, artist[256] = {0}, copyright[256] = {0};
-    parse_mmf_metadata(mmf_data, mmf_size, title, artist, copyright);
+    if (ext) {
+        if (_stricmp(ext, ".mid") == 0 || _stricmp(ext, ".midi") == 0) {
+            format = FORMAT_MID;
+            format_name = "MIDI";
+        } else if (_stricmp(ext, ".mmf") == 0) {
+            format = FORMAT_MMF;
+            format_name = "MMF";
+        } else if (_stricmp(ext, ".wav") == 0) {
+            format = FORMAT_WAV;
+            format_name = "WAV";
+        }
+    }
 
-    if (title[0]) printf("Title: %s\n", title);
-    if (artist[0]) printf("Artist: %s\n", artist);
-    if (copyright[0]) printf("Copyright: %s\n", copyright);
+    printf("Loaded %s: %d bytes\n", format_name, mmf_size);
+
+    // Parse metadata (only for MMF files)
+    if (format == FORMAT_MMF) {
+        char title[256] = {0}, artist[256] = {0}, copyright[256] = {0};
+        parse_mmf_metadata(mmf_data, mmf_size, title, artist, copyright);
+
+        if (title[0]) printf("Title: %s\n", title);
+        if (artist[0]) printf("Artist: %s\n", artist);
+        if (copyright[0]) printf("Copyright: %s\n", copyright);
+    }
 
     // Initialize MA context
     ma_context_t ctx;
@@ -279,10 +304,10 @@ int main(int argc, char* argv[]) {
 
     printf("Initialized MA-%d, sample rate: %d Hz\n", mode == MODE_MA7 ? 7 : mode == MODE_MA5 ? 5 : 3, sample_rate);
 
-    // Load MMF
-    int sound_id = ma_load(&ctx, FORMAT_MMF, mmf_data, mmf_size);
+    // Load file
+    int sound_id = ma_load(&ctx, format, mmf_data, mmf_size);
     if (sound_id < 0) {
-        fprintf(stderr, "Failed to load MMF\n");
+        fprintf(stderr, "Failed to load %s\n", format_name);
         ma_cleanup(&ctx);
         free(mmf_data);
         return 1;
@@ -291,11 +316,11 @@ int main(int argc, char* argv[]) {
     printf("Sound ID: %d\n", sound_id);
 
     // Get length
-    int length_ms = ma_get_length(&ctx, FORMAT_MMF, sound_id);
+    int length_ms = ma_get_length(&ctx, format, sound_id);
     printf("Length: %d ms (%.2f seconds)\n", length_ms, length_ms / 1000.0);
 
     // Start playback
-    if (ma_start(&ctx, FORMAT_MMF, sound_id, 0) != 0) {
+    if (ma_start(&ctx, format, sound_id, 0) != 0) {
         fprintf(stderr, "Failed to start playback\n");
         ma_cleanup(&ctx);
         free(mmf_data);
@@ -310,14 +335,14 @@ int main(int argc, char* argv[]) {
     int last_pos = -1;
 
     while (elapsed_ms < expected_ms) {
-        int status = ma_get_status(&ctx, FORMAT_MMF, sound_id);
+        int status = ma_get_status(&ctx, format, sound_id);
 
         if (status != STATE_PLAYING && status != STATE_READY) {
             printf("\nPlayback ended, status: %d\n", status);
             break;
         }
 
-        int pos = ma_get_position(&ctx, FORMAT_MMF, sound_id);
+        int pos = ma_get_position(&ctx, format, sound_id);
         if (pos == last_pos) {
             // Position not advancing, might be finished
             break;
@@ -335,7 +360,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Stop playback
-    ma_stop(&ctx, FORMAT_MMF, sound_id);
+    ma_stop(&ctx, format, sound_id);
 
     printf("\nPlayback complete.\n");
 
