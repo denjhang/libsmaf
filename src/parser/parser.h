@@ -48,6 +48,8 @@ typedef struct {
     uint8_t  lfo;            /* LFO setting */
     uint8_t  bo;             /* basic octave */
     uint8_t  num_ops;        /* 2 or 4 operators */
+    uint8_t  drum_key;       /* drum note number (0 = melodic) */
+    uint8_t  voice_type;     /* 0=FM, 1=WT/PCM, 2=AL */
     uint8_t  raw[31];        /* raw voice data */
     uint8_t  raw_len;        /* 17 or 31 */
 } smaf_voice_t;
