@@ -152,3 +152,96 @@ C:\Users\denjhang\AppData\Roaming\ghidra\ghidra_12.1_PUBLIC\compiled_scripts\
 | ExportDecompiledFunctions.java (废弃) | `libsmaf/` |
 | ghidra_export_headless.py (废弃) | `libsmaf/` |
 | run_ghidra_export.bat | `libsmaf/` |
+
+## SSD.exe 逆向分析
+
+### 目标
+逆向 Yamaha SSD.exe（MA Decorator 的 MIDI→MMF 转换工具），提取 CnvTo 函数的调用约定。
+
+### 关键发现
+
+SSD.exe **不直接调用** CnvMA3SMF.dll 等转换 DLL，而是加载 **SSD.dll**，通过函数指针调用内部 API：
+
+```c
+// FUN_0041b640 — DLL 加载函数
+LoadLibraryA(*(param_1 + 8));                        // 加载 SSD.dll
+GetProcAddress(hModule, "Ssd_SmfFmt10Cnv");           // +0x110: MIDI→SMAF 转换
+GetProcAddress(hModule, "Ssd_SmfParse_Rsrc");           // +0x114: SMF资源解析
+GetProcAddress(hModule, "Ssd_SmfParse");                // +0x118: SMF解析
+GetProcAddress(hModule, "Ssd_VoiceCtrl");               // +0x11C: 音色控制
+GetProcAddress(hModule, "Ssd_SscCnv_Rsrc");             // +0x120: SSC转换(资源)
+GetProcAddress(hModule, "Ssd_SscCnv");                  // +0x124: SSC→SMAF 转换
+GetProcAddress(hModule, "Ssd_SmafPlay_Rsrc");           // +0x128: SMAF播放(资源)
+GetProcAddress(hModule, "Ssd_SmafPlay");                // +0x12C: SMAF播放
+```
+
+### Ssd_SmfFmt10Cnv 调用约定（MIDI→SMAF）
+
+来自 `FUN_0041b7e0`（地址 0x0041b7e0, 203B）：
+
+```c
+int Ssd_SmfFmt10Cnv(
+    void* midi_data,      // 输入 MIDI 数据指针
+    int   midi_size,      // 输入 MIDI 数据大小
+    void* output_buf,     // 输出缓冲区指针
+    int   output_size,    // 输出缓冲区大小
+    void* config          // 配置结构体指针（240字节，初始全零）
+);
+// 返回值: >=0 成功(输出大小), -1 内存不足, -18 参数错误
+```
+
+### Ssd_SscCnv 调用约定（SSC→SMAF）
+
+来自反编译代码（偏移+0x124 处调用）：
+
+```c
+int Ssd_SscCnv(
+    void* input_data,    // 输入数据指针
+    int   input_size,    // 输入数据大小
+    void* config,        // 配置结构体指针
+    int   format_flags   // 格式标志: 0x2002=MA-2, 0x3002=MA-3, 0x5000=MA-5
+);
+```
+
+### 配置结构体布局（param_1）
+
+| 偏移 | 大小 | 内容 |
+|------|------|------|
+| +0x04 | 4 | HMODULE（DLL 句柄） |
+| +0x08 | 4 | DLL 路径指针 |
+| +0x10C | 4 | 音色数据指针 |
+| +0x110 | 4 | Ssd_SmfFmt10Cnv 函数指针 |
+| +0x114 | 4 | Ssd_SmfParse_Rsrc 函数指针 |
+| +0x118 | 4 | Ssd_SmfParse 函数指针 |
+| +0x11C | 4 | Ssd_VoiceCtrl 函数指针 |
+| +0x120 | 4 | Ssd_SscCnv_Rsrc 函数指针 |
+| +0x124 | 4 | Ssd_SscCnv 函数指针 |
+| +0x128 | 4 | Ssd_SmafPlay_Rsrc 函数指针 |
+| +0x12C | 4 | Ssd_SmafPlay 函数指针 |
+
+### 反编译统计
+
+| 指标 | 数值 |
+|------|------|
+| 导出函数总数 | 1543 |
+| 成功反编译 | 1543 |
+| 跳过（thunk/小函数） | 1036 |
+| 错误 | 0 |
+| 分析耗时 | ~120s |
+
+### 相关文件
+
+| 文件 | 路径 |
+|------|------|
+| SSD.exe（复制自安装目录） | `tools/yamaha_converter/SSD.exe` |
+| 全部反编译代码 | `tools/yamaha_converter/ghidra_output/all_decompiled.c` |
+| DLL加载函数分析 | `tools/yamaha_converter/ghidra_output/cnvto_usage_analysis.txt` |
+| 分析批处理 | `tools/yamaha_converter/run_import_export.bat` |
+| 导出批处理 | `tools/yamaha_converter/export_ssd.bat` |
+
+### Ghidra OSGi 脚本编译注意事项
+
+1. **-import 模式**会触发 OSGi 编译新脚本，**-process -noanalysis 模式不会**
+2. 修改脚本后必须删除 `osgi/compiled-bundles/fd69aa21/` 中对应的 .class 文件
+3. 不能删除整个 `osgi/compiled-bundles/` 目录，否则 Ghidra 核心 bundle 会丢失
+4. 使用 `-import` 而非 `-process` 来运行修改过的脚本（即重新导入）

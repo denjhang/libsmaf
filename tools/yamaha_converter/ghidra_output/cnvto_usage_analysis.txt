@@ -1,0 +1,60 @@
+=== SSD.exe CnvTo Usage Analysis ===
+
+Analysis Date: Mon May 18 06:24:28 CST 2026
+
+=== Functions calling LoadLibraryA or GetProcAddress ===
+
+Function: FUN_0041b640
+  Address: 0x0041b640
+  Size: 327 bytes
+  Has LoadLibrary: true
+  Has GetProcAddress: true
+
+Function: FUN_0041d102
+  Address: 0x0041d102
+  Size: 216 bytes
+  Has LoadLibrary: false
+  Has GetProcAddress: true
+
+Function: FUN_00428c44
+  Address: 0x00428c44
+  Size: 41 bytes
+  Has LoadLibrary: false
+  Has GetProcAddress: true
+
+Function: FUN_0042ce50
+  Address: 0x0042ce50
+  Size: 137 bytes
+  Has LoadLibrary: true
+  Has GetProcAddress: true
+
+Function: FUN_004322a0
+  Address: 0x004322a0
+  Size: 203 bytes
+  Has LoadLibrary: false
+  Has GetProcAddress: true
+
+Function: FUN_00437df2
+  Address: 0x00437df2
+  Size: 119 bytes
+  Has LoadLibrary: true
+  Has GetProcAddress: true
+
+Function: FUN_0043c063
+  Address: 0x0043c063
+  Size: 54 bytes
+  Has LoadLibrary: false
+  Has GetProcAddress: true
+
+Function: FUN_0043c099
+  Address: 0x0043c099
+  Size: 70 bytes
+  Has LoadLibrary: false
+  Has GetProcAddress: true
+
+=== Summary ===
+Total functions: 2579
+Functions using LoadLibrary/GetProcAddress: 8
+
+=== All Imported Functions ===
+
