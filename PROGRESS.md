@@ -4,9 +4,12 @@
 
 为 RP2350 (双核 Cortex-M33, 520KB SRAM, 无 FPU) 实现纯软件 SMAF/MMF 播放库，不依赖 Yamaha 专有 DLL。
 
-## 当前状态：Phase 1a ✅ Phase 1b ✅
+## 当前状态：Phase 1a ✅ Phase 1b ✅ Phase 1c ✅
 
-FM合成核心已对齐 fmfm.core 参考实现。MMF Parser/Sequencer 已对齐 go-smaf 参考实现，含 VM3Exclusive voice 数据展开。有 FM voice 数据的 MA-3 MMF 文件可正常播放输出 WAV。
+FM合成核心已对齐 fmfm.core。MMF Parser/Sequencer 已对齐 go-smaf + MA-3 MegaGRRL。
+支持 MA-2 (43 03 VMA Voice) 和 MA-3/5/7 (43 79 06/07 7F VM3Exclusive) 两种音色格式。
+Format 0 (HandyPhone) 和 Format 2 (MobileStandard) 事件解析已完成。
+松下G60 20个铃声中9个可正常播放，11个依赖硬件ROM音色（纯软件无法播放）。
 
 WAV 输出位置: `output/` 目录。
 
@@ -76,6 +79,47 @@ WAV 输出位置: `output/` 目录。
 | Cosmic.mmf | 0 | 无 FM voice 数据 |
 | Kokoro1.mmf | 0 | 无 FM voice 数据 |
 | NTT DoCoMo.mmf | 0 | 无 FM voice 数据 |
+
+---
+
+## Phase 1c：MA-2 VMA Voice + Format 0 事件对齐 MA-3 ✅
+
+### 对齐完成项
+
+| 对齐项 | 修复内容 |
+|--------|----------|
+| VMA Voice (43 03) | 实现 5字节算子→7字节标准格式转换 (`convert_vma_voice`) |
+| VMA→VM35 映射 | SR=EGT?0:RR, DT=0, FB仅op0, XOF=false, EAM=AM, EVB=VIB |
+| Format 0 控制事件 | 重写 `parse_score_format0`，严格对齐 MA-3 `NextEvent2_PlayS` |
+| 2字节控制事件 | type=(byte>>4)&3, value=byte&0xF: Expression/Modulation/PitchBend |
+| 3字节控制事件 | type=byte&0xF, value=next: PC/BankSelect/OctaveShift/Volume/Pan |
+| Track通道偏移 | track>=2 时 ch += (track-1)*4，匹配 MA-3 硬件通道映射 |
+| Voice fallback | 无匹配 PC 时用 track 第一个 voice，替代硬件 ROM 音色 |
+
+### 松下G60 (YM2403, Format 0) 播放测试
+
+| 文件 | Peak | 状态 |
+|------|------|------|
+| Sound_1 | 0 | dummy voice (硬件ROM) |
+| Sound_2 | 0 | dummy voice |
+| Sound_3 | 0 | dummy voice |
+| **Sound_4** | **32767** | **LOUD** |
+| **Sound_5** | **3842** | **OK** |
+| **Sound_6** | **3715** | **OK** |
+| **Sound_7** | **32767** | **LOUD** |
+| Sound_8 | 0 | 无有效voice参数 |
+| Sound_9 | 0 | 无有效voice参数 |
+| Sound_10 | 0 | 无有效voice参数 |
+| **Sound_11** | **32767** | **LOUD** |
+| Sound_12 | 0 | 无有效voice参数 |
+| **Sound_13** | **19755** | **OK** |
+| Sound_14 | 0 | 无有效voice参数 |
+| Sound_15 | 0 | 无有效voice参数 |
+| **Sound_16** | **15206** | **OK** |
+| Sound_17 | 0 | 无有效voice参数 |
+| Sound_18 | 0 | 无有效voice参数 |
+| **Sound_19** | **16997** | **OK** |
+| **Sound_20** | **32768** | **LOUD** |
 
 ---
 
@@ -153,7 +197,7 @@ libsmaf/
 
 ## 已知问题
 
-1. **无 voice 数据的 MMF 文件无声音**: Cosmic/Kokoro1/NTT DoCoMo 等文件不含 FM voice Setup Data，parser 正确识别但 sequencer 无法播放。需确认这些文件是否使用 WT/PCM 或其他合成方式。
+1. **硬件ROM音色文件无声**: 部分Format 0 MMF文件的Mtsu中voice参数为空/dummy，依赖硬件内置ROM音色。纯软件合成器无法替代，需考虑内置默认音色库。
 2. **流式音频 (Mtsp)**: PCM/ADPCM 流式块尚未对接到播放管线
 3. **LFO**: 颤音/震音 LFO 尚未实现
 4. **DSP 效果**: 混响/3D 未实现

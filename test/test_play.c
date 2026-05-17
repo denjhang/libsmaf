@@ -1,12 +1,64 @@
 /* Playback test — load MMF, render to WAV */
 
 #include "../include/smaf.h"
+#include "../src/parser/parser.h"
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+static const char *evt_type_name(uint8_t type) {
+    switch (type & 0xF0) {
+        case 0x90: return "NoteOn";
+        case 0x80: return "NoteOff";
+        case 0xB0: return "CC";
+        case 0xC0: return "PC";
+        case 0xE0: return "PitchBend";
+        case 0xF0: return "SysEx";
+        default:   return "Unknown";
+    }
+}
+
+static void dump_parse(const uint8_t *data, size_t len) {
+    smaf_file_t mf;
+    smaf_result_t res = smaf_parse(&mf, data, len);
+    if (res != SMAF_OK) { printf("  Parse failed: %d\n", res); return; }
+
+    if (mf.title[0]) printf("  Title: %s\n", mf.title);
+    printf("  Tracks: %d\n", mf.num_tracks);
+
+    for (int t = 0; t < mf.num_tracks; t++) {
+        smaf_track_t *trk = &mf.tracks[t];
+        printf("  Track %d: format=%d timebase_d=0x%02x timebase_g=0x%02x\n",
+               t, trk->format_type, trk->timebase_d, trk->timebase_g);
+        printf("    Voices: %d, Events: %d\n", trk->num_voices, trk->num_events);
+
+        for (int v = 0; v < trk->num_voices; v++) {
+            smaf_voice_t *voice = &trk->voices[v];
+            printf("    Voice %d: prog=%d alg=%d fb=%d pan=%d ops=%d type=%s\n",
+                   v, voice->prog, voice->alg, voice->fb, voice->panpot, voice->num_ops,
+                   voice->voice_type == 0 ? "FM" : voice->voice_type == 1 ? "WT" : "AL");
+        }
+
+        for (int e = 0; e < trk->num_events; e++) {
+            smaf_score_event_t *evt = &trk->events[e];
+            printf("    [%d] dt=%-5u %s ch=%d", e, evt->delta_time,
+                   evt_type_name(evt->type), evt->channel);
+            if ((evt->type & 0xF0) == 0x90 || (evt->type & 0xF0) == 0x80) {
+                printf(" note=%d vel=%d gate=%u", evt->note, evt->velocity, evt->gate_time);
+            } else if ((evt->type & 0xF0) == 0xB0) {
+                printf(" cc=%d val=%d", evt->cc_number, evt->cc_value);
+            } else if ((evt->type & 0xF0) == 0xC0) {
+                printf(" prog=%d", evt->program);
+            }
+            printf("\n");
+        }
+    }
+    smaf_parse_free(&mf);
+}
+
 static int play_to_wav(const char *mmf_path, const char *wav_path) {
-    printf("Playing %s -> %s\n", mmf_path, wav_path);
+    printf("\n=== %s ===\n", mmf_path);
 
     FILE *f = fopen(mmf_path, "rb");
     if (!f) { printf("  Cannot open %s\n", mmf_path); return 1; }
@@ -16,6 +68,10 @@ static int play_to_wav(const char *mmf_path, const char *wav_path) {
     uint8_t *data = malloc(size);
     fread(data, 1, size, f);
     fclose(f);
+    printf("  File size: %ld bytes\n", size);
+
+    /* Dump parse info */
+    dump_parse(data, size);
 
     smaf_player_t *player = smaf_player_create(22050);
     if (!player) { printf("  Failed to create player\n"); free(data); return 1; }
@@ -55,6 +111,20 @@ static int play_to_wav(const char *mmf_path, const char *wav_path) {
     }
 
     printf("  Rendered %d samples (%.1f seconds)\n", total, (float)total / 22050.0f);
+
+    /* Amplitude analysis */
+    int32_t peak = 0;
+    double rms_sum = 0.0;
+    for (int i = 0; i < total; i++) {
+        int32_t absL = all_L[i] < 0 ? -(int32_t)all_L[i] : all_L[i];
+        int32_t absR = all_R[i] < 0 ? -(int32_t)all_R[i] : all_R[i];
+        if (absL > peak) peak = absL;
+        if (absR > peak) peak = absR;
+        rms_sum += (double)all_L[i] * all_L[i] + (double)all_R[i] * all_R[i];
+    }
+    double rms = (total > 0) ? sqrt(rms_sum / (total * 2)) : 0.0;
+    printf("  Peak=%d/%d, RMS=%.0f (%s)\n", peak, 32767, rms,
+           peak == 0 ? "SILENT" : peak > 30000 ? "LOUD" : peak > 10000 ? "OK" : "WEAK");
 
     if (total > 0) {
         FILE *wf = fopen(wav_path, "wb");

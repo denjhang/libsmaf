@@ -184,6 +184,14 @@ void seq_init(seq_state_t *seq, smaf_synth_t *synth, const smaf_track_t *track, 
         uint8_t prog = track->voices[i].prog;
         if (prog < 128) seq->voice_map[prog] = i;
     }
+    /* Fallback: if track has voices but no mapping for default program (0),
+       fill all unmapped programs with first voice — hardware would use ROM voices
+       but we have none, so use the loaded FM voice data as default */
+    if (track->num_voices > 0 && seq->voice_map[0] < 0) {
+        for (int i = 0; i < 128; i++) {
+            if (seq->voice_map[i] < 0) seq->voice_map[i] = 0;
+        }
+    }
 
     /* Build wave map */
     for (int i = 0; i < 128; i++) seq->wave_map[i] = -1;

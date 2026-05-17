@@ -88,7 +88,92 @@ static void expand_vm3_exclusive(const uint8_t *raw, int raw_len, uint8_t *out) 
     }
 }
 
-/* Decode FM voice from expanded standard format (17 or 31 bytes). */
+/* Convert VMA (MA-2) 5-byte operator to standard 7-byte VM35 format.
+   VMA operator layout:
+     byte 0: MULT(4)|VIB|EGT|SUS|KSR
+     byte 1: RR(4)|DR(4)
+     byte 2: AR(4)|SL(4)
+     byte 3: TL(6)|KSL(2)
+     byte 4: DVB(2)|DAM(2)|AM|WS(3)
+
+   Standard VM35 operator layout (7 bytes):
+     byte 0: SR(4)|XOF(1)|unused(1)|SUS(1)|KSR(1)
+     byte 1: RR(4)|DR(4)
+     byte 2: AR(4)|SL(4)
+     byte 3: TL(6)|KSL(2)
+     byte 4: unused(1)|DAM(2)|EAM(1)|unused(1)|DVB(2)|EVB(1)
+     byte 5: MULTI(4)|unused(1)|DT(3)
+     byte 6: WS(5)|FB(3)
+
+   Conversion rules (go-smaf vmafm.go ToVM35):
+     SR = EGT ? 0 : RR
+     DT = 0 (VMA has no detune)
+     FB = only op0 gets real FB, rest = 0
+     XOF = false, EAM = AM, EVB = VIB */
+static void vma_op_to_standard(const uint8_t *vma_op, uint8_t *std_op, int fb) {
+    uint8_t mult  = (vma_op[0] >> 4) & 0xF;
+    bool   vib    = (vma_op[0] >> 3) & 1;
+    bool   egt    = (vma_op[0] >> 2) & 1;
+    bool   sus    = (vma_op[0] >> 1) & 1;
+    bool   ksr    = vma_op[0] & 1;
+    uint8_t rr    = (vma_op[1] >> 4) & 0xF;
+    uint8_t dr    = vma_op[1] & 0xF;
+    uint8_t ar    = (vma_op[2] >> 4) & 0xF;
+    uint8_t sl    = vma_op[2] & 0xF;
+    uint8_t tl    = (vma_op[3] >> 2) & 0x3F;
+    uint8_t ksl   = vma_op[3] & 0x3;
+    uint8_t dvb   = (vma_op[4] >> 6) & 0x3;
+    uint8_t dam   = (vma_op[4] >> 4) & 0x3;
+    bool   am     = (vma_op[4] >> 3) & 1;
+    uint8_t ws    = vma_op[4] & 0x7;
+
+    uint8_t sr = egt ? 0 : rr;
+
+    std_op[0] = (sr << 4) | (sus << 1) | ksr;
+    std_op[1] = (rr << 4) | dr;
+    std_op[2] = (ar << 4) | sl;
+    std_op[3] = (tl << 2) | ksl;
+    std_op[4] = (dam << 5) | ((am ? 1 : 0) << 4) | (dvb << 1) | (vib ? 1 : 0);
+    std_op[5] = (mult << 4);
+    std_op[6] = (ws << 3) | fb;
+}
+
+/* Convert VMA (MA-2) voice data to standard 31-byte VM35 format.
+   VMA voice layout:
+     byte 0: LFO(2)|FB(3)|ALG(3)
+     byte 1: 0x01 (mystery/padding)
+     Per operator (5 bytes, only active ops):
+       MULT(4)|VIB|EGT|SUS|KSR, RR(4)|DR(4), AR(4)|SL(4), TL(6)|KSL(2), DVB(2)|DAM(2)|AM|WS(3)
+
+   Standard 31-byte output:
+     byte 0: DrumKey (0 for melodic)
+     byte 1: PANPOT(5)|unused(1)|BO(2) — defaults: pan=15(<<3), BO=0
+     byte 2: LFO(2)|PE(1)|unused(3)|ALG(3)
+     Per op (7 bytes): standard VM35 format */
+static void convert_vma_voice(const uint8_t *vma, int vma_len, uint8_t *out) {
+    uint8_t lfo = (vma[0] >> 6) & 0x3;
+    uint8_t fb  = (vma[0] >> 3) & 0x7;
+    uint8_t alg = vma[0] & 0x7;
+    /* byte 1 = 0x01, skipped */
+
+    int num_ops = (alg < 2) ? 2 : 4;
+
+    out[0] = 0; /* DrumKey */
+    out[1] = (15 << 3); /* PANPOT=15 (center), BO=0 */
+    out[2] = (lfo << 6) | alg;
+
+    const uint8_t *op_data = vma + 2; /* skip 2-byte header */
+    for (int op = 0; op < 4; op++) {
+        int dst = 3 + op * 7;
+        uint8_t op_fb = (op == 0) ? fb : 0;
+        if (op < num_ops && (2 + op * 5 + 5) <= vma_len) {
+            vma_op_to_standard(op_data + op * 5, out + dst, op_fb);
+        } else {
+            memset(out + dst, 0, 7);
+        }
+    }
+}
+
 static void decode_fm_voice(smaf_voice_t *voice, uint8_t prog, const uint8_t *data, int len) {
     voice->prog = prog;
     voice->raw_len = (uint8_t)(len > 31 ? 31 : len);
@@ -155,7 +240,7 @@ static void parse_setup_data(smaf_track_t *trk, const uint8_t *data, int len) {
 
         const uint8_t *msg = data + pos;
 
-        /* Check Yamaha SMAF manufacturer ID: 43 79 XX 7F */
+        /* Check Yamaha SMAF manufacturer ID: 43 79 XX 7F (MA-3/MA-5) */
         if (msg_len >= 5 && msg[0] == 0x43 && msg[1] == 0x79 && msg[3] == 0x7F) {
             uint8_t dev_id = msg[2]; /* 06=MA-3, 07=MA-5/7 */
 
@@ -199,6 +284,29 @@ static void parse_setup_data(smaf_track_t *trk, const uint8_t *data, int len) {
                     track_add_voice(trk, &voice);
                 }
             }
+        }
+        /* Check MA-2 VMA Voice: 43 03 <bank> <pc> <voice_data...>
+           go-smaf exclusive.go line 145-157:
+             msg[0] = 0x43 (Yamaha), msg[1] = 0x03 (MA-2)
+             msg[2] = Bank, msg[3] = PC
+             msg[4:] = VMA voice data (2-byte header + N*5-byte operators)
+           Minimum: 2-op = 2+10=12 bytes, 4-op = 2+20=22 bytes
+           Also handles in-sequence pitch bend: 43 03 90 XX YY (5 bytes, too short) */
+        else if (msg_len >= 6 && msg[0] == 0x43 && msg[1] == 0x03) {
+            uint8_t pc = msg[3];
+            int voice_data_len = msg_len - 4;
+            if (voice_data_len >= 12) {
+                /* Valid VMA voice: convert to standard 31-byte format */
+                uint8_t standard[31];
+                memset(standard, 0, 31);
+                convert_vma_voice(msg + 4, voice_data_len, standard);
+
+                smaf_voice_t voice;
+                memset(&voice, 0, sizeof(voice));
+                decode_fm_voice(&voice, pc, standard, 31);
+                track_add_voice(trk, &voice);
+            }
+            /* else: too short, likely pitch bend control message — skip */
         }
 
         pos += msg_len;
@@ -316,8 +424,20 @@ static void parse_score_format2(smaf_track_t *trk, const uint8_t *data, int len)
 }
 
 /* Parse Score track events (Format 0: HandyPhone / MA-1/MA-2).
-   Compact CCOONNNN note encoding, 2/3-byte control events. */
-static void parse_score_format0(smaf_track_t *trk, const uint8_t *data, int len) {
+   Aligned with MA-3 MegaGRRL NextEvent2_PlayS (mammfcnv.c).
+
+   Event encoding:
+     0x00 → Control message, read next byte (b)
+       chno = (b >> 6) & 3;  if track>=2: chno += (track-1)*4
+       (b & 0x30) != 0x30 → 2-byte event: type=(b>>4)&3, value=b&0xF
+         type=0: Expression, type=2: Modulation, type=3: PitchBend
+       (b & 0x30) == 0x30 → 3-byte event: type=b&0xF, value=next_byte
+         type=0: Program Change, type=1: Bank Select, type=2: Octave Shift,
+         type=3: Modulation, type=7: Volume, type=0xA: Pan, type=0xB: Expression
+     0xFF → Exclusive/NOP
+       non-F0 → NOP; F0 → read len, then 43 02/03 pitch bend
+     other → Note CCOONNNN: ch=(b>>6)&3, oct=(b>>4)&3, key=b&0xF */
+static void parse_score_format0(smaf_track_t *trk, const uint8_t *data, int len, int track_index) {
     int pos = 0;
     uint32_t delta = 0;
 
@@ -331,77 +451,104 @@ static void parse_score_format0(smaf_track_t *trk, const uint8_t *data, int len)
         evt.delta_time = delta;
 
         if (b == 0x00) {
-            /* Control event */
+            /* Control message */
             if (pos >= len) break;
-            uint8_t b2 = data[pos++];
-            uint8_t ctrl_type = b2 & 0x07;
-            uint8_t ctrl_data = (b2 >> 3) & 0x1F;
+            uint8_t ctrl = data[pos++];
+            uint8_t chno = (ctrl >> 6) & 0x03;
+            if (track_index >= 2) chno += (track_index - 1) * 4;
 
-            switch (ctrl_type) {
-                case 0x00: break; /* Fine Tune */
-                case 0x01: /* Pitch Bend */
-                    evt.type = EVT_PITCH_BEND | 0;
-                    evt.channel = (ctrl_data >> 2) & 0x03;
-                    evt.pitch_bend = 0x2000;
-                    break;
-                case 0x02: break; /* Modulation */
-                case 0x03: /* Extended control */
-                {
-                    if (pos >= len) break;
-                    uint8_t ext = data[pos++];
-                    uint8_t ext_type = ext & 0x07;
-                    uint8_t ext_val = (ext >> 3) & 0x1F;
-                    uint8_t ch = ctrl_data & 0x03;
-                    switch (ext_type) {
-                        case 0x00:
-                            evt.type = EVT_PC | ch;
-                            evt.channel = ch;
-                            evt.program = ext_val;
-                            break;
-                        case 0x01:
-                            evt.type = EVT_CC | ch;
-                            evt.channel = ch;
-                            evt.cc_number = CC_VOLUME;
-                            evt.cc_value = ext_val * 8;
-                            break;
-                        case 0x02:
-                            evt.type = EVT_CC | ch;
-                            evt.channel = ch;
-                            evt.cc_number = CC_PAN;
-                            evt.cc_value = ext_val * 8;
-                            break;
-                        case 0x03:
-                            evt.type = EVT_CC | ch;
-                            evt.channel = ch;
-                            evt.cc_number = CC_EXPRESSION;
-                            evt.cc_value = ext_val * 8;
-                            break;
-                    }
-                    break;
+            if ((ctrl & 0x30) != 0x30) {
+                /* 2-byte event: type in bits 5-4, value in bits 3-0 */
+                uint8_t evtype = (ctrl >> 4) & 0x03;
+                uint8_t value = ctrl & 0x0F;
+                switch (evtype) {
+                    case 0x00: /* Expression (2-byte) */
+                        evt.type = EVT_CC | chno;
+                        evt.channel = chno;
+                        evt.cc_number = CC_EXPRESSION;
+                        evt.cc_value = value * 8;
+                        break;
+                    case 0x02: /* Modulation (2-byte) */
+                        evt.type = EVT_CC | chno;
+                        evt.channel = chno;
+                        evt.cc_number = CC_MODULATION;
+                        evt.cc_value = value;
+                        break;
+                    case 0x03: /* Pitch Bend (2-byte) */
+                        evt.type = EVT_PITCH_BEND | chno;
+                        evt.channel = chno;
+                        evt.pitch_bend = 0x2000;
+                        break;
+                }
+            } else {
+                /* 3-byte event: type in bits 3-0, value = next byte */
+                if (pos >= len) break;
+                uint8_t evtype = ctrl & 0x0F;
+                uint8_t value = data[pos++];
+                switch (evtype) {
+                    case 0x00: /* Program Change */
+                        evt.type = EVT_PC | chno;
+                        evt.channel = chno;
+                        evt.program = value;
+                        break;
+                    case 0x01: /* Bank Select */
+                        evt.type = EVT_CC | chno;
+                        evt.channel = chno;
+                        evt.cc_number = CC_BANK_SELECT;
+                        evt.cc_value = value;
+                        break;
+                    case 0x02: /* Octave Shift */
+                        break; /* NOP for now */
+                    case 0x03: /* Modulation (3-byte) */
+                        evt.type = EVT_CC | chno;
+                        evt.channel = chno;
+                        evt.cc_number = CC_MODULATION;
+                        evt.cc_value = value;
+                        break;
+                    case 0x07: /* Volume */
+                        evt.type = EVT_CC | chno;
+                        evt.channel = chno;
+                        evt.cc_number = CC_VOLUME;
+                        evt.cc_value = value;
+                        break;
+                    case 0x0A: /* Pan */
+                        evt.type = EVT_CC | chno;
+                        evt.channel = chno;
+                        evt.cc_number = CC_PAN;
+                        evt.cc_value = value;
+                        break;
+                    case 0x0B: /* Expression (3-byte) */
+                        evt.type = EVT_CC | chno;
+                        evt.channel = chno;
+                        evt.cc_number = CC_EXPRESSION;
+                        evt.cc_value = value;
+                        break;
                 }
             }
             track_add_event(trk, &evt);
         } else if (b == 0xFF) {
-            /* Exclusive or NOP (MegaGRRL NextEvent2_PlayS) */
+            /* Exclusive or NOP */
             if (pos >= len) break;
             uint8_t b2 = data[pos++];
-            if (b2 == 0x00) {
+            if (b2 != 0xF0) {
                 track_add_event(trk, &evt); /* NOP */
-            } else if (b2 == 0xF0) {
-                /* Exclusive message: length byte, then skip data + F7 */
+            } else {
+                /* Exclusive: length byte, then 43 02/03 pitch bend */
                 if (pos >= len) break;
                 uint8_t excl_len = data[pos++];
+                if (pos + excl_len > len) break;
+                /* Skip exclusive data + F7 */
                 pos += excl_len;
                 if (pos < len && data[pos] == 0xF7) pos++;
             }
         } else {
-            /* Note event: CCOONNNN
-               MegaGRRL Note_ON2: bKey = ((oct + bType) * 12) + key
-               bType default = 4 for melody. Then: if < 12 → 0, > 139 → 127, else -= 12 */
+            /* Note event: CCOONNNN */
             uint8_t ch = (b >> 6) & 0x03;
+            if (track_index >= 2) ch += (track_index - 1) * 4;
             uint8_t oct = (b >> 4) & 0x03;
             uint8_t note_val = b & 0x0F;
 
+            /* MegaGRRL Note_ON2: bKey = ((oct + bType) * 12) + key */
             uint8_t midi_note = (uint8_t)(((oct + 4) * 12) + note_val);
             if (midi_note < 12)
                 midi_note = 0;
@@ -424,7 +571,8 @@ static void parse_score_format0(smaf_track_t *trk, const uint8_t *data, int len)
 static void parse_mtr_chunk(smaf_file_t *mf, const uint8_t *data, uint32_t chunk_size) {
     if (chunk_size < 4) return;
 
-    smaf_track_t *trk = &mf->tracks[mf->num_tracks++];
+    smaf_track_t *trk = &mf->tracks[mf->num_tracks];
+    int track_index = mf->num_tracks++;
     memset(trk, 0, sizeof(smaf_track_t));
 
     trk->format_type = data[0];
@@ -454,7 +602,7 @@ static void parse_mtr_chunk(smaf_file_t *mf, const uint8_t *data, uint32_t chunk
             if (trk->format_type == SCORE_FMT_MOBILE_STD)
                 parse_score_format2(trk, data + pos, sub_size);
             else if (trk->format_type == SCORE_FMT_HANDYPHONE)
-                parse_score_format0(trk, data + pos, sub_size);
+                parse_score_format0(trk, data + pos, sub_size, track_index);
         }
 
         pos += sub_size;
