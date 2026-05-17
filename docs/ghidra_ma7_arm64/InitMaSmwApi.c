@@ -1,0 +1,135 @@
+/* InitMaSmwApi @ 0012c3ec 1476B */
+
+
+/* CM7_EmuSmw7App::InitMaSmwApi() */
+
+void __thiscall CM7_EmuSmw7App::InitMaSmwApi(CM7_EmuSmw7App *this)
+
+{
+  if (*(int *)(this + 8) == 0) {
+    *(undefined **)(this + 0x400) = PTR_MaSmw_Init_005679a0;
+    *(undefined **)(this + 0x408) = PTR_MaSmw_Term_00567db8;
+    *(undefined **)(this + 0x410) = PTR_MaSmw_DevCtrl_00567140;
+    *(undefined **)(this + 0x418) = PTR_MaSmw_Check_00567b78;
+    *(undefined **)(this + 0x420) = PTR_MaSmw_GetInfo_00567ef0;
+    *(undefined **)(this + 0x428) = PTR_MaSmw_Open_00567d30;
+    *(undefined **)(this + 0x430) = PTR_MaSmw_Close_005676c0;
+    *(undefined **)(this + 0x438) = PTR_MaSmw_Ctrl_00567390;
+    *(undefined **)(this + 0x440) = PTR_MaSmw_Seek_005675d0;
+    *(undefined **)(this + 0x448) = PTR_MaSmw_Start_00567f80;
+    *(undefined **)(this + 0x450) = PTR_MaSmw_Stop_00567ad8;
+    *(undefined **)(this + 0x458) = PTR_MaSmw_Unload_00567688;
+    *(undefined **)(this + 0x460) = PTR_MaSmw_GetKaraokeData_005674d8;
+    *(undefined **)(this + 0xa0) = PTR_Mapi_Initialize_00567670;
+    *(undefined **)(this + 0xa8) = PTR_Mapi_Terminate_005671b0;
+    *(undefined **)(this + 0xb0) = PTR_Mapi_ResetMode_00567678;
+    *(undefined **)(this + 0xb8) = PTR_Mapi_SetMode_005675a8;
+    *(undefined **)(this + 0xc0) = PTR_Mapi_GetMode_00567238;
+    *(undefined **)(this + 200) = PTR_Mapi_GetOpenMode_00567760;
+    *(undefined **)(this + 0xd0) = PTR_Mapi_CheckLoad_005672a0;
+    *(undefined **)(this + 0xd8) = PTR_Mapi_CheckUnload_00567450;
+    *(undefined **)(this + 0xe0) = PTR_Mapi_GetContentsData_005675d8;
+    *(undefined **)(this + 0xe8) = PTR_Mapi_GetPhraseList_005676e0;
+    *(undefined **)(this + 0xf0) = PTR_Mapi_GetKaraokeData_005675b0;
+    *(undefined **)(this + 0xf8) = PTR_Mapi_DeviceControl_00567f98;
+    *(undefined **)(this + 0x100) = PTR_Mapi_DeviceControlEx_00567ab8;
+    *(undefined **)(this + 0x108) = PTR_Mapi_Melody_Load_005679f8;
+    *(undefined **)(this + 0x110) = PTR_Mapi_Melody_Unload_00567220;
+    *(undefined **)(this + 0x118) = PTR_Mapi_Melody_OpenArgInit_00567e58;
+    *(undefined **)(this + 0x120) = PTR_Mapi_Melody_Open_005671c0;
+    *(undefined **)(this + 0x128) = PTR_Mapi_Melody_Close_00567ab0;
+    *(undefined **)(this + 0x130) = PTR_Mapi_Melody_Standby_00567ed8;
+    *(undefined **)(this + 0x138) = PTR_Mapi_Melody_Seek_00567508;
+    *(undefined **)(this + 0x140) = PTR_Mapi_Melody_Start_00567c70;
+    *(undefined **)(this + 0x148) = PTR_Mapi_Melody_Stop_005674a8;
+    *(undefined **)(this + 0x150) = PTR_Mapi_Melody_WaitReady_00567c88;
+    *(undefined **)(this + 0x158) = PTR_Mapi_Melody_Control_00567258;
+    *(undefined **)(this + 0x160) = PTR_Mapi_Phrase_GetInfo_00567680;
+    *(undefined **)(this + 0x168) = PTR_Mapi_Phrase_CheckData_00567930;
+    *(undefined **)(this + 0x170) = PTR_Mapi_Phrase_SetData_005673f8;
+    *(undefined **)(this + 0x178) = PTR_Mapi_Phrase_Seek_00567af8;
+    *(undefined **)(this + 0x180) = PTR_Mapi_Phrase_Play_00567720;
+    *(undefined **)(this + 0x188) = PTR_Mapi_Phrase_Stop_00567f30;
+    *(undefined **)(this + 400) = PTR_Mapi_Phrase_Pause_00567db0;
+    *(undefined **)(this + 0x198) = PTR_Mapi_Phrase_Restart_00567fd8;
+    *(undefined **)(this + 0x1a0) = PTR_Mapi_Phrase_GetPosition_00567e10;
+    *(undefined **)(this + 0x1a8) = PTR_Mapi_Phrase_GetLength_00567260;
+    *(undefined **)(this + 0x1b0) = PTR_Mapi_Phrase_SetVolume_005672a8;
+    *(undefined **)(this + 0x1b8) = PTR_Mapi_Phrase_GetVolume_005674b0;
+    *(undefined **)(this + 0x1c0) = PTR_Mapi_Phrase_SetPanpot_00567b08;
+    *(undefined **)(this + 0x1c8) = PTR_Mapi_Phrase_GetPanpot_00567e48;
+    *(undefined **)(this + 0x1d0) = PTR_Mapi_Phrase_SetLink_005677e8;
+    *(undefined **)(this + 0x1d8) = PTR_Mapi_Phrase_GetLink_00567950;
+    *(undefined **)(this + 0x1e0) = PTR_Mapi_Phrase_GetStatus_00567d38;
+    *(undefined **)(this + 0x1e8) = PTR_Mapi_Phrase_SetEvHandler_00567ff0;
+    *(undefined **)(this + 0x1f0) = PTR_Mapi_Phrase_RemoveData_00567250;
+    *(undefined **)(this + 0x1f8) = PTR_Mapi_Phrase_Kill_00567eb0;
+    *(undefined **)(this + 0x200) = PTR_Mapi_Phrase_AudioLoad_00567658;
+    *(undefined **)(this + 0x208) = PTR_Mapi_Phrase_AudioUnload_005671a8;
+    *(undefined **)(this + 0x210) = PTR_Mapi_Phrase_AudioOpen_005676d0;
+    *(undefined **)(this + 0x218) = PTR_Mapi_Phrase_AudioClose_00567bd8;
+    *(undefined **)(this + 0x220) = PTR_Mapi_Phrase_AudioControl_00567590;
+    *(undefined **)(this + 0x228) = PTR_Mapi_Phrase_AudioStandby_005673a8;
+    *(undefined **)(this + 0x230) = PTR_Mapi_Phrase_AudioSeek_00567d00;
+    *(undefined **)(this + 0x238) = PTR_Mapi_Phrase_AudioStart_00567830;
+    *(undefined **)(this + 0x240) = PTR_Mapi_Phrase_AudioStop_00567578;
+    *(undefined **)(this + 0x248) = PTR_Mapi_Hvs_Load_00567ed0;
+    *(undefined **)(this + 0x250) = PTR_Mapi_Hvs_Unload_00567510;
+    *(undefined **)(this + 600) = PTR_Mapi_Hvs_Open_00567ae0;
+    *(undefined **)(this + 0x260) = PTR_Mapi_Hvs_Close_00567540;
+    *(undefined **)(this + 0x268) = PTR_Mapi_Hvs_Control_005676c8;
+    *(undefined **)(this + 0x270) = PTR_Mapi_Hvs_Standby_00567cf8;
+    *(undefined **)(this + 0x278) = PTR_Mapi_Hvs_Seek_00567278;
+    *(undefined **)(this + 0x280) = PTR_Mapi_Hvs_Start_00567b18;
+    *(undefined **)(this + 0x288) = PTR_Mapi_Hvs_Stop_00567ce0;
+    *(undefined **)(this + 0x290) = PTR_Mapi_Stm_Load_005675e0;
+    *(undefined **)(this + 0x298) = PTR_Mapi_Stm_Unload_00567810;
+    *(undefined **)(this + 0x2a0) = PTR_Mapi_Stm_Open_005674b8;
+    *(undefined **)(this + 0x2a8) = PTR_Mapi_Stm_Close_005673c8;
+    *(undefined **)(this + 0x2b0) = PTR_Mapi_Stm_Control_005674f8;
+    *(undefined **)(this + 0x2b8) = PTR_Mapi_Stm_Standby_005679a8;
+    *(undefined **)(this + 0x2c0) = PTR_Mapi_Stm_Seek_00567430;
+    *(undefined **)(this + 0x2c8) = PTR_Mapi_Stm_Start_00567918;
+    *(undefined **)(this + 0x2d0) = PTR_Mapi_Stm_Stop_00567f68;
+    *(undefined **)(this + 0x2d8) = PTR_Mapi_Din_Open_00567dc0;
+    *(undefined **)(this + 0x2e0) = PTR_Mapi_Din_Close_00567368;
+    *(undefined **)(this + 0x2e8) = PTR_Mapi_Din_Control_00567d58;
+    *(undefined **)(this + 0x2f0) = PTR_Mapi_Din_Standby_00567c30;
+    *(undefined **)(this + 0x2f8) = PTR_Mapi_Din_Start_00567be8;
+    *(undefined **)(this + 0x300) = PTR_Mapi_Din_Stop_005675a0;
+    *(undefined **)(this + 0x308) = PTR_Mapi_Dtmf_Open_00567c28;
+    *(undefined **)(this + 0x310) = PTR_Mapi_Dtmf_Close_00567fe8;
+    *(undefined **)(this + 0x318) = PTR_Mapi_Dtmf_Control_005678d0;
+    *(undefined **)(this + 800) = PTR_Mapi_Dtmf_Standby_00567b70;
+    *(undefined **)(this + 0x328) = PTR_Mapi_Dtmf_Start_00567df0;
+    *(undefined **)(this + 0x330) = PTR_Mapi_Dtmf_Stop_005671b8;
+    *(undefined **)(this + 0x338) = PTR_Mapi_Rec_Load_00567538;
+    *(undefined **)(this + 0x340) = PTR_Mapi_Rec_Unload_00567ca8;
+    *(undefined **)(this + 0x348) = PTR_Mapi_Rec_Open_005674e8;
+    *(undefined **)(this + 0x350) = PTR_Mapi_Rec_Close_005679e8;
+    *(undefined **)(this + 0x358) = PTR_Mapi_Rec_Control_00567cd0;
+    *(undefined **)(this + 0x360) = PTR_Mapi_Rec_Standby_00567d98;
+    *(undefined **)(this + 0x368) = PTR_Mapi_Rec_Start_005677d0;
+    *(undefined **)(this + 0x370) = PTR_Mapi_Rec_Stop_00567978;
+    *(undefined **)(this + 0x378) = PTR_MaSound_Initialize_005672f8;
+    *(undefined **)(this + 0x380) = PTR_MaSound_Terminate_00567320;
+    *(undefined **)(this + 0x388) = PTR_MaSound_DeviceControl_005678f0;
+    *(undefined **)(this + 0x390) = PTR_MaSound_DeviceControlEx_00567190;
+    *(undefined **)(this + 0x398) = PTR_MaSound_Create_00567bf0;
+    *(undefined **)(this + 0x3a0) = PTR_MaSound_Delete_00567938;
+    *(undefined **)(this + 0x3a8) = PTR_MaSound_Load_00567ff8;
+    *(undefined **)(this + 0x3b0) = PTR_MaSound_Unload_005675c0;
+    *(undefined **)(this + 0x3b8) = PTR_MaSound_Open_00567630;
+    *(undefined **)(this + 0x3c0) = PTR_MaSound_Close_00567338;
+    *(undefined **)(this + 0x3c8) = PTR_MaSound_Control_00567b90;
+    *(undefined **)(this + 0x3d0) = PTR_MaSound_Standby_00567b88;
+    *(undefined **)(this + 0x3d8) = PTR_MaSound_Seek_005674a0;
+    *(undefined **)(this + 0x3e0) = PTR_MaSound_Start_005671d8;
+    *(undefined **)(this + 1000) = PTR_MaSound_Pause_00567a38;
+    *(undefined **)(this + 0x3f0) = PTR_MaSound_Restart_00567408;
+    *(undefined **)(this + 0x3f8) = PTR_MaSound_Stop_00567908;
+    *(undefined **)(this + 0x468) = PTR_machdep_IntHandler_00567920;
+  }
+  return;
+}
+

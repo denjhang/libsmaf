@@ -1,0 +1,1 @@
+/mingw64/bin/cc.exe  -Wall -Wextra -g -O0 -Wl,--enable-auto-import CMakeFiles/test_fm.dir/test/test_fm.c.o -o test_fm.exe -Wl,--out-implib,libtest_fm.dll.a -Wl,--major-image-version,0,--minor-image-version,0  libsmaf.a -lm

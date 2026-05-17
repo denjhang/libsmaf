@@ -1,0 +1,56 @@
+/* CBInfo_Initialize @ 001304d8 392B */
+
+
+/* CBInfo_Initialize(my_event_t*) */
+
+void CBInfo_Initialize(my_event_t *param_1)
+
+{
+  InitializeCriticalSection((critical_section *)&DAT_00582540);
+  EnterCriticalSection((critical_section *)&DAT_00582540);
+  DAT_00582570 = 0;
+  DAT_005826f8 = FUN_0012fd44;
+  DAT_00582710 = FUN_0012fdac;
+  DAT_00582728 = FUN_0012fe18;
+  DAT_00582740 = FUN_0012fe84;
+  DAT_00582758 = FUN_0012fef0;
+  DAT_00582770 = FUN_0012ff5c;
+  DAT_00582788 = FUN_0012ffc8;
+  DAT_005827a0 = FUN_00130034;
+  DAT_005827b8 = FUN_001300a0;
+  DAT_005827d0 = FUN_0013010c;
+  DAT_005826f0 = 0;
+  DAT_00582708 = 0;
+  DAT_00582720 = 0;
+  DAT_00582738 = 0;
+  DAT_00582750 = 0;
+  DAT_00582768 = 0;
+  DAT_00582780 = 0;
+  DAT_00582798 = 0;
+  DAT_005827b0 = 0;
+  DAT_005827c8 = 0;
+  DAT_005827e0 = 0;
+  DAT_005827e8 = FUN_00130178;
+  DAT_005827f8 = 0;
+  DAT_00582800 = FUN_001301e4;
+  DAT_00582810 = 0;
+  DAT_00582818 = FUN_00130250;
+  DAT_00582828 = 0;
+  DAT_00582830 = FUN_001302bc;
+  DAT_00582840 = 0;
+  DAT_00582848 = FUN_00130328;
+  DAT_00582858 = 0;
+  DAT_00582860 = FUN_00130394;
+  DAT_00582870 = 0;
+  DAT_00582878 = FUN_00130400;
+  DAT_00582888 = 0;
+  DAT_00582890 = FUN_0013046c;
+  DAT_005828a0 = 0;
+  DAT_005828a8 = FUN_0012fc6c;
+  DAT_005828b8 = 0;
+  DAT_005828c0 = FUN_0012fcd8;
+  DAT_005826e0 = param_1;
+  LeaveCriticalSection((critical_section *)&DAT_00582540);
+  return;
+}
+

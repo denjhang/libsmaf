@@ -1,0 +1,153 @@
+
+
+C:\Program Files (x86)\Yamaha\MA7_AT\ATS-MA7-SMAF
+
+
+
+
+
+Read D:\working\vscode-projects\Reference_Project\RP2350-Reference\smaf_20260516\libsmaf\docs\ghidra_ma7_arm64\LoadHwLibrary.c
+
+
+
+python3 << 'PYEOF'
+import struct
+
+DATA_DIR = r'D:\working\vscode-projects\Reference_Project\RP2350-Reference\smaf_20260516\libsmaf\docs\ma7_rom_data'
+
+# 使用 Ghidra 导出的 rom_wave_source (64KB, 从 .so 直接截取)
+with open(f'{DATA_DIR}/rom_wave_source.bin', 'rb') as f:
+    rom = f.read()
+
+print(f'ROM data: {len(rom)} bytes, non-zero: {sum(1 for b in rom if b != 0)}')
+print()
+
+# 分析数据结构 - 每 4 字节一组 (uint32 小端)
+# 之前看到值模式: 0x104881, 0x1048a7, ... 递增约 38-42
+# 这些可能是虚拟地址表 (0x10xxxx range)
+
+# 统计 uint32 值的分布
+vals32 = struct.unpack(f'<{len(rom)//4}I', rom)
+print(f'Total uint32 values: {len(vals32)}')
+print(f'Min: {min(vals32):#010x}, Max: {max(vals32):#010x}')
+
+# 按范围统计
+ranges = {
+    '0x00000-0x000FF': 0,
+    '0x00100-0x00FFF': 0,
+    '0x01000-0x01FFF': 0,
+    '0x02000-0x02FFF': 0,
+    '0x03000-0x03FFF': 0,
+    '0x04000-0x04FFF': 0,
+    '0x05000-0x05FFF': 0,
+    '0x06000-0x06FFF': 0,
+    '0x07000-0x07FFF': 0,
+    '0x08000-0x08FFF': 0,
+    '0x09000-0x09FFF': 0,
+    '0x0A000-0x0AFFF': 0,
+    '0x0B000-0x0BFFF': 0,
+    '0x0C000-0x0CFFF': 0,
+    '0x0D000-0x0DFFF': 0,
+    '0x0E000-0x0EFFF': 0,
+    '0x0F000-0x0FFFF': 0,
+}
+for v in vals32:
+    bucket = v >> 12
+    key = f'0x{bucket:05x}000-0x{bucket:05x}FFF'
+    if key in ranges:
+        ranges[key] += 1
+
+for k, v in ranges.items():
+    if v > 0:
+        bar = '#' * min(v // 100, 60)
+        print(f'  {k}: {v:5d} {bar}')
+
+# 看看有多少值在 "波形数据" 范围 (16-bit signed)
+small_signed = sum(1 for v in vals32 if v <= 0x7FFF and v >= 0xFFFF8000)
+print(f'\nSmall signed values (16-bit range): {small_signed}')
+
+# 看看有多少看起来像虚拟地址 (0x001xxxx - 0x005xxxx)
+addr_like = sum(1 for v in vals32 if 0x10000 <= v <= 0x60000)
+print(f'Address-like values (0x10000-0x60000): {addr_like}')
+
+# 打印前 64 个 uint32 值
+print('\nFirst 64 uint32 values:')
+for i in range(0, 64, 4):
+    vals = rom[i*4:(i+4)*4]
+    line = ' '.join(f'{v:08x}' for v in struct.unpack_from('<I', vals))
+    print(f'  {i*4:05x}: {line}')
+
+# 搜索可能的 _tagFmVoiceInfo 模式
+# 第一个字节应该包含 ALG(3bit) + FB(2bit), 范围 0x00-0x1F
+# 搜索连续的小值区域 (可能是音色参数块)
+print('\nSearching for voice parameter blocks (ALG+FB in first byte)...')
+
+# 另一种方法: 直接从 rom 数据中找 _tagFmVoiceInfo
+# FM VoiceInfo 格式 (32 bytes):
+# +0x00: AL(3bit) | FB(2bit) | ... 范围 0x00-0x1F 或更宽
+# +0x01: Op1 flags (waveform, DAM, EG, SUS) 范围较小
+# 搜索: 找连续区域中 byte[0] < 0x20 的位置
+
+# 尝试按 32 字节步长解析, 找看起来合理的音色
+def is_valid_voice(data, offset):
+    """检查 offset 处是否像 _tagFmVoiceInfo"""
+    if offset + 32 > len(data):
+        return False
+    chunk = data[offset:offset+32]
+    # ALG 应该是 0-7
+    alg_fb = chunk[0] & 0x1F
+    if alg_fb > 0x1F:
+        return False
+    alg = alg_fb & 0x07
+    fb = (alg_fb >> 3) & 0x03
+    # Op1 waveform 应该是 0-7
+    op1_ws = chunk[1] & 0x0F
+    if op1_ws > 7:
+        return False
+    # Op1 AR 应该是 0-15
+    op1_ar = chunk[4] & 0x0F
+    # 多个算子的 AR/DR/SR/RR 都应该是 0-15
+    # 检查是否有合理的包络参数
+    valid_envelope = 0
+    for op_off in [1, 0x0C, 0x18]:  # Op1, Op2, Op3 (12-byte apart)
+        if op_off + 0x08 > 32:
+            break
+        ar = chunk[op_off + 4] & 0x0F
+        dr = chunk[op_off + 5] & 0x3F  # includes AM bits
+        sl = chunk[op_off + 6] & 0x3F
+        rr = chunk[op_off + 8] & 0x1F
+        if ar <= 15 and sl <= 15 and rr <= 15:
+            valid_envelope += 1
+    return valid_envelope >= 2
+
+# 在整个 ROM 中搜索
+found_voices = []
+for i in range(0, len(rom) - 32, 1):
+    if is_valid_voice(rom, i):
+        found_voices.append(i)
+
+print(f'Potential voice blocks found: {len(found_voices)}')
+if found_voices[:20]:
+    print('First 20 locations:')
+    for offset in found_voices[:20]:
+        chunk = rom[offset:offset+32]
+        hex_str = ' '.join(f'{b:02x}' for b in chunk)
+        print(f'  {offset:#06x}: {hex_str}')
+
+PYEOF
+
+
+
+
+现在来分析已导出的 64KB ROM 数据。这是唯一有实际数据的来源，GM 音色参数一定在里面。
+
+Bash Analyze 64KB ROM structure for voice data
+
+
+C:/Users/denjhang/AppData/Roaming/ghidra/ghidra_12.1_PUBLIC/osgi/compiled-bundles/fd69aa21/ExportROMData.class
+
+
+D:\Program Files\ghidra_12.1_PUBLIC_20260513\ghidra_12.1_PUBLIC
+
+
+D:\Program Files\jadx-1.5.5\bin

@@ -1,0 +1,67 @@
+package jp.co.ymm.android.ringtone;
+
+import android.R;
+
+/* JADX INFO: loaded from: D:\working\vscode-projects\Reference_Project\RP2350-Reference\smaf_20260516\apk_extract\classes.dex */
+public final class j {
+    public static final int ColorStateListItem_alpha = 2;
+    public static final int ColorStateListItem_android_alpha = 1;
+    public static final int ColorStateListItem_android_color = 0;
+    public static final int CoordinatorLayout_Layout_android_layout_gravity = 0;
+    public static final int CoordinatorLayout_Layout_layout_anchor = 1;
+    public static final int CoordinatorLayout_Layout_layout_anchorGravity = 2;
+    public static final int CoordinatorLayout_Layout_layout_behavior = 3;
+    public static final int CoordinatorLayout_Layout_layout_dodgeInsetEdges = 4;
+    public static final int CoordinatorLayout_Layout_layout_insetEdge = 5;
+    public static final int CoordinatorLayout_Layout_layout_keyline = 6;
+    public static final int CoordinatorLayout_keylines = 0;
+    public static final int CoordinatorLayout_statusBarBackground = 1;
+    public static final int FontFamilyFont_android_font = 0;
+    public static final int FontFamilyFont_android_fontStyle = 2;
+    public static final int FontFamilyFont_android_fontVariationSettings = 4;
+    public static final int FontFamilyFont_android_fontWeight = 1;
+    public static final int FontFamilyFont_android_ttcIndex = 3;
+    public static final int FontFamilyFont_font = 5;
+    public static final int FontFamilyFont_fontStyle = 6;
+    public static final int FontFamilyFont_fontVariationSettings = 7;
+    public static final int FontFamilyFont_fontWeight = 8;
+    public static final int FontFamilyFont_ttcIndex = 9;
+    public static final int FontFamily_fontProviderAuthority = 0;
+    public static final int FontFamily_fontProviderCerts = 1;
+    public static final int FontFamily_fontProviderFetchStrategy = 2;
+    public static final int FontFamily_fontProviderFetchTimeout = 3;
+    public static final int FontFamily_fontProviderPackage = 4;
+    public static final int FontFamily_fontProviderQuery = 5;
+    public static final int GradientColorItem_android_color = 0;
+    public static final int GradientColorItem_android_offset = 1;
+    public static final int GradientColor_android_centerColor = 7;
+    public static final int GradientColor_android_centerX = 3;
+    public static final int GradientColor_android_centerY = 4;
+    public static final int GradientColor_android_endColor = 1;
+    public static final int GradientColor_android_endX = 10;
+    public static final int GradientColor_android_endY = 11;
+    public static final int GradientColor_android_gradientRadius = 5;
+    public static final int GradientColor_android_startColor = 0;
+    public static final int GradientColor_android_startX = 8;
+    public static final int GradientColor_android_startY = 9;
+    public static final int GradientColor_android_tileMode = 6;
+    public static final int GradientColor_android_type = 2;
+    public static final int LoadingImageView_circleCrop = 0;
+    public static final int LoadingImageView_imageAspectRatio = 1;
+    public static final int LoadingImageView_imageAspectRatioAdjust = 2;
+    public static final int RingtonePreference_listTitle = 0;
+    public static final int RingtonePreference_targetVolume = 1;
+    public static final int SignInButton_buttonSize = 0;
+    public static final int SignInButton_colorScheme = 1;
+    public static final int SignInButton_scopeUris = 2;
+    public static final int[] ColorStateListItem = {R.attr.color, R.attr.alpha, b.c.a.alpha};
+    public static final int[] CoordinatorLayout = {b.c.a.keylines, b.c.a.statusBarBackground};
+    public static final int[] CoordinatorLayout_Layout = {R.attr.layout_gravity, b.c.a.layout_anchor, b.c.a.layout_anchorGravity, b.c.a.layout_behavior, b.c.a.layout_dodgeInsetEdges, b.c.a.layout_insetEdge, b.c.a.layout_keyline};
+    public static final int[] FontFamily = {b.c.a.fontProviderAuthority, b.c.a.fontProviderCerts, b.c.a.fontProviderFetchStrategy, b.c.a.fontProviderFetchTimeout, b.c.a.fontProviderPackage, b.c.a.fontProviderQuery};
+    public static final int[] FontFamilyFont = {R.attr.font, R.attr.fontWeight, R.attr.fontStyle, R.attr.ttcIndex, R.attr.fontVariationSettings, b.c.a.font, b.c.a.fontStyle, b.c.a.fontVariationSettings, b.c.a.fontWeight, b.c.a.ttcIndex};
+    public static final int[] GradientColor = {R.attr.startColor, R.attr.endColor, R.attr.type, R.attr.centerX, R.attr.centerY, R.attr.gradientRadius, R.attr.tileMode, R.attr.centerColor, R.attr.startX, R.attr.startY, R.attr.endX, R.attr.endY};
+    public static final int[] GradientColorItem = {R.attr.color, R.attr.offset};
+    public static final int[] LoadingImageView = {2130903042, 2130903055, 2130903056};
+    public static final int[] RingtonePreference = {2130903064, 2130903067};
+    public static final int[] SignInButton = {2130903041, 2130903043, 2130903065};
+}

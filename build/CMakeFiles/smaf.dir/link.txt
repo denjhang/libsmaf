@@ -1,0 +1,2 @@
+/mingw64/bin/ar.exe qc libsmaf.a CMakeFiles/smaf.dir/src/smaf.c.o CMakeFiles/smaf.dir/src/synth/fm_table.c.o CMakeFiles/smaf.dir/src/synth/fm_synth.c.o CMakeFiles/smaf.dir/src/synth/mixer.c.o CMakeFiles/smaf.dir/src/synth/adpcm.c.o CMakeFiles/smaf.dir/src/synth/noise.c.o CMakeFiles/smaf.dir/src/parser/chunk.c.o CMakeFiles/smaf.dir/src/sequencer/seq.c.o CMakeFiles/smaf.dir/src/audio/audio_mock.c.o
+/mingw64/bin/ranlib.exe libsmaf.a

@@ -1,0 +1,1 @@
+/mingw64/bin/cc.exe  -Wall -Wextra -g -O0 -Wl,--enable-auto-import CMakeFiles/test_eg_trace.dir/test/test_eg_trace.c.o -o test_eg_trace.exe -Wl,--out-implib,libtest_eg_trace.dll.a -Wl,--major-image-version,0,--minor-image-version,0  libsmaf.a -lm

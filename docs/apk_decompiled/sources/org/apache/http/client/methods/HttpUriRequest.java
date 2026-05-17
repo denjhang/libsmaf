@@ -1,0 +1,15 @@
+package org.apache.http.client.methods;
+
+import java.net.URI;
+import org.apache.http.HttpRequest;
+
+/* JADX INFO: loaded from: D:\working\vscode-projects\Reference_Project\RP2350-Reference\smaf_20260516\apk_extract\classes.dex */
+public interface HttpUriRequest extends HttpRequest {
+    void abort();
+
+    String getMethod();
+
+    URI getURI();
+
+    boolean isAborted();
+}

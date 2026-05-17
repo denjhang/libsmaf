@@ -1,0 +1,1 @@
+/mingw64/bin/cc.exe  -Wall -Wextra -g -O0 -Wl,--enable-auto-import CMakeFiles/test_parser.dir/test/test_parser.c.o -o test_parser.exe -Wl,--out-implib,libtest_parser.dll.a -Wl,--major-image-version,0,--minor-image-version,0  libsmaf.a -lm
