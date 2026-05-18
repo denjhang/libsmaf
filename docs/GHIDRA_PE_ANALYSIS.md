@@ -513,6 +513,50 @@ MMF 文件 (MMMD header + CNTI + OPDA + MTR chunks)
 - Sony PS2 Seq.mid (5156B) → Stage1 5141B → Stage2 3543B MMF
 - 输出文件以 `MMMD` 开头（Mobile Music Data），与 Yamaha 参考文件格式一致
 
+### vm3 音色库与风格设定（Standard/Bright/Cyber/Reflect）
+
+SSD.exe 启动时要求用户选择四种风格之一。风格选择通过 `param_7 >> 8` 传入 sscma3.dll。
+
+**ssscma3.dll 完整流程（FUN_10007f10）vs midi2mmf v10：**
+```
+sscma3.dll 完整流程:
+  1. LoadLibrary(DVAchecker.dll) + FreeLibrary — 仅检查存在性，不调用
+  2. FUN_100039c0 — SMF 解析
+  3. CnvMA3SMF.dll::CnvTo (DLL ID=7) — SMF→处理后SMF
+  4. FUN_10004930 — 构建 OPDA chunk 结构
+  5. FUN_10005b60 — 写入 Dch 子块头
+  6. FUN_10007850 — 加载 vm3 音色库 ← midi2mmf 缺失此步骤
+     ├── DefMA3_16.vm3 (当 style != 0x31)
+     └── DefMA3_32.vm3 (当 style == 0x31)
+     解析 FMM3 格式中的 3MMF/3MVW 块，提取波形数据
+  7. FUN_100044b0 — 合并音色到输出
+  8. CnvMA3SMAF_SC.dll::CnvTo (DLL ID=8) — 包装为最终 MMF
+
+midi2mmf v10 流程:
+  1. CnvMA3SMF.dll::CnvTo (ordinal 2)
+  2. CnvMA3SMAF_SC.dll::CnvTo (ordinal 3) — 使用内置 s_ToolDefaultVoice
+```
+
+**风格编号（param_7 >> 8）：**
+- 有效值: `0`, `0x30`, `0x31`（sscma3.dll 中的条件检查）
+- `0x31` → 使用 `DefMA3_32.vm3`（32音色版本）
+- 其他 → 使用 `DefMA3_16.vm3`（16音色版本）
+
+**vm3 文件格式（FMM3 = 0x464D4D33）：**
+- `SsdDefMA3_16.vm3` — 音色均以 `St-` 前缀命名（Standard 风格）
+- 包含音色定义和 3MVW 波形数据块
+- `FMM3` header + 音色条目（名称 + FM 参数）+ 波形数据
+
+**DVAchecker.dll 的角色：**
+- 仅做 LoadLibrary/FreeLibrary 检查（确认 DLL 存在）
+- 不调用任何导出函数
+- 不是转换必需的
+
+**midi2mmf v10 的限制：**
+- 未加载 vm3 音色库，使用 CnvMA3SMAF_SC.dll 内置的 `s_ToolDefaultVoice` 默认音色
+- OPDA chunk 结构与 SSD.exe 输出不同（缺少 Dch + vm3 波形数据）
+- 生成的 MMF 可播放，但音色不是 Yamaha 标准风格音色
+
 ### 错误码汇总
 
 | 错误码 | 来源 | 含义 | 状态 |
@@ -546,6 +590,7 @@ MMF 文件 (MMMD header + CNTI + OPDA + MTR chunks)
 | DLL加载函数分析 | `tools/yamaha_converter/ghidra_output/cnvto_usage_analysis.txt` |
 | DLL 文件副本 | `tools/yamaha_converter/ghidra_dlls/` |
 | 导入+导出批处理 | `tools/yamaha_converter/run_import_export.bat` |
+| MA-3 音色库 (16音色) | `tools/yamaha_converter/SsdDefMA3_16.vm3` |
 | midi2mmf 转换器 (v10) | `tools/yamaha_converter/midi2mmf.c` |
 
 ## 另见
