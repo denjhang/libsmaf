@@ -159,14 +159,97 @@ int Ssd_SscCnv(
 | +0x128 | 4 | Ssd_SmafPlay_Rsrc 函数指针 |
 | +0x12C | 4 | Ssd_SmafPlay 函数指针 |
 
+## DLL 反编译进展
+
+### 已反编译的 DLL
+
+| DLL | 函数数 | 跳过 | 错误 | 输出文件 |
+|-----|--------|------|------|----------|
+| SSD.dll | 454 | 160 | 0 | `ghidra_output_ssddll/all_decompiled.c` |
+| Fc10.dll | 201 | 60 | 0 | `ghidra_output_fc10/all_decompiled.c` |
+| SSD.exe | 1543 | 1036 | 0 | `ghidra_output/all_decompiled.c` |
+
+### DLL 调用链发现
+
+通过 Ghidra 反编译 SSD.dll，发现完整的 DLL 调用链：
+
+```
+SSD.exe
+  └─ SSD.dll
+       ├─ Ssd_SmfFmt10Cnv → Fc10.dll::ConvertSMF1ToSMF0  (SMF1→SMF0 格式转换)
+       ├─ Ssd_SmfParse_Rsrc → Ssd_Parser.dll::Ssd_SmfParse_Rsrc
+       ├─ Ssd_SmfParse → Ssd_Parser.dll::Ssd_SmfParse
+       ├─ Ssd_VoiceCtrl → Ssd_VoiceCtrl.dll
+       ├─ Ssd_SscCnv → Ssd_sscma{2,3,5}.dll::SscCnv  (SSC→SMAF 核心转换)
+       ├─ Ssd_SscCnv_Rsrc → Ssd_sscma{2,3,5}.dll::Ssd_SscCnv_Rsrc
+       ├─ Ssd_SmafPlay → Ssd_Parser.dll
+       └─ Ssd_SmafPlay_Rsrc → Ssd_Parser.dll
+```
+
+**关键发现：`Ssd_SmfFmt10Cnv` 只是 MIDI 格式转换（SMF1→SMF0），不是 MIDI→SMAF！**
+真正的 MIDI→SMAF 转换走的是 `Ssd_SscCnv` 路径，由 `Ssd_sscma3.dll`（MA-3）等 DLL 实现。
+
+### Fc10.dll::ConvertSMF1ToSMF0（已验证）
+
+```c
+// __cdecl 调用约定
+int ConvertSMF1ToSMF0(
+    char* midi_data,      // 输入 MIDI SMF1 数据
+    int   midi_size,      // 输入数据大小
+    void* output_buf,     // 输出缓冲区（SMF0 格式）
+    uint  output_size     // 输出缓冲区大小
+);
+// 返回值: >=0 成功(输出字节数), -1 内部错误, -2 无效格式,
+//         -3 未知, -4 未知, -5 参数无效, -6 缓冲区不足
+```
+
+**注意**: SSD.dll 在运行时通过 `LoadLibraryA("Fc10.dll")` 动态加载 Fc10.dll，
+所以调用 SSD.dll 前，Fc10.dll 必须在 DLL 搜索路径中（同目录或系统目录）。
+
+### Ssd_SmfFmt10Cnv 完整签名（已修正）
+
+```c
+// __cdecl，不是 __stdcall！
+void __cdecl Ssd_SmfFmt10Cnv(
+    void* midi_data,      // 输入 MIDI 数据
+    int   midi_size,      // 输入大小
+    void* output_buf,     // 输出缓冲区
+    int   output_size,    // 输出缓冲区大小
+    uint32_t* error_code  // [out] 错误详情
+);
+// 内部调用 Fc10.dll::ConvertSMF1ToSMF0，映射返回值：
+//   -6 → 0xFFFFFFFE (-2, 缓冲区不足)
+//   -5 → 0xFFFFFFFD (-3, 写 error_code=0xf1000002)
+//   -4 → 0xFFFFFFFC (-4, 写 error_code=0xf1000004)
+//   -1 → 0xFFFFFFFF (Fc10.dll 加载失败)
+```
+
+### CnvMA3SMF.dll::CnvTo（未解决）
+
+从反汇编发现 CnvTo 不是简单的 `CnvTo(input_path, output_path, config)` 签名。
+arg1 被当作结构体指针，其中 `+4` = 数据指针, `+8` = 数据大小。
+函数验证 "MThd" magic，说明 arg1 是一个包含 MIDI 文件内存数据的描述符。
+需要进一步反编译 CnvMA3SMF.dll 来确认完整签名。
+
+### Ssd_sscma3.dll（待反编译）
+
+核心 MIDI→SMAF 转换 DLL，导出：
+- `SscCnv` @ RVA 0x6050
+- `Ssd_SscCnv` @ RVA 0x7e60
+- `Ssd_SscCnv_Rsrc` @ RVA 0x7e30
+
 ## 相关文件
 
 | 文件 | 路径 |
 |------|------|
 | SSD.exe（复制自安装目录） | `tools/yamaha_converter/SSD.exe` |
-| 全部反编译代码 | `tools/yamaha_converter/ghidra_output/all_decompiled.c` |
+| SSD.exe 反编译代码 | `tools/yamaha_converter/ghidra_output/all_decompiled.c` |
+| SSD.dll 反编译代码 | `tools/yamaha_converter/ghidra_output_ssddll/all_decompiled.c` |
+| Fc10.dll 反编译代码 | `tools/yamaha_converter/ghidra_output_fc10/all_decompiled.c` |
 | DLL加载函数分析 | `tools/yamaha_converter/ghidra_output/cnvto_usage_analysis.txt` |
+| DLL 文件副本 | `tools/yamaha_converter/ghidra_dlls/` |
 | 导入+导出批处理 | `tools/yamaha_converter/run_import_export.bat` |
+| midi2mmf 测试程序 | `tools/yamaha_converter/midi2mmf.c` |
 
 ## 另见
 
