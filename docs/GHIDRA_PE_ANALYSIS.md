@@ -470,11 +470,48 @@ uint32_t result = CnvTo(params);
 - 输出以 `MThd` 开头 — **CnvTo 的输出是处理后的 SMF 格式，不是最终 SMAF 文件**
 - sscma3.dll 的 FUN_10007f10 在 CnvTo 之后还需要构建 SMAF 文件结构
 
-### CnvMA3SMAF_SC.dll（待分析）
+### CnvMA3SMAF_SC.dll（已分析，876 函数）
 
-被 sscma3.dll 的 FUN_10001af0 在 CnvTo 之后调用（DLL ID=8）。
-可能负责：将 CnvTo 的处理结果包装为最终 SMAF 文件格式（###SMAF 头 + Dch 块等）。
-已启动反编译，等待结果。
+被 sscma3.dll 的 FUN_10001af0 在 CnvTo 之后调用（DLL ID=8, 函数ID=1）。
+负责：将 CnvMA3SMF.dll 的处理结果包装为最终 MMF 文件格式（`MMMD` header）。
+
+**导出函数（3个）：**
+
+| Ordinal | 名称 | 地址 | 说明 |
+|---------|------|------|------|
+| 1 | GetMAxVersion | 0x10001000 | 返回 MA-x 版本号 |
+| 2 | CnvFrom | 0x10001050 | SMAF→SMF 反向转换 |
+| 3 | CnvTo | 0x10002a20 | SMF→SMAF 正向转换（11649字节） |
+
+**CnvTo 参数结构**（与 CnvMA3SMF.dll 相同）：
+```c
+uint32_t params[5];
+params[0] = flags;        // 转换标志，内部会 & 0xFFFF
+params[1] = input_ptr;    // 处理后的 SMF 数据
+params[2] = input_size;   // 输入大小
+params[3] = output_ptr;   // 输出缓冲区
+params[4] = output_size;  // 输入=缓冲区容量，输出=实际写入大小
+```
+
+**注意：CnvTo 是 ordinal 3**（CnvMA3SMF.dll 中 CnvTo 是 ordinal 2，因为 SC 版本多了 GetMAxVersion）。
+
+**错误码：**
+- `0x80000001` = 输出缓冲区太小
+- `0x80000002` = 输入格式无效
+
+**完整调用链：**
+```
+原始 SMF (MIDI)
+    ↓ CnvMA3SMF.dll::CnvTo (ordinal 2)
+处理后的 SMF (MThd格式，优化过的事件)
+    ↓ CnvMA3SMAF_SC.dll::CnvTo (ordinal 3)
+MMF 文件 (MMMD header + CNTI + OPDA + MTR chunks)
+```
+
+**实测结果（midi2mmf v10）：**
+- BrilliantSnow.mid (10905B) → Stage1 10898B → Stage2 5673B MMF
+- Sony PS2 Seq.mid (5156B) → Stage1 5141B → Stage2 3543B MMF
+- 输出文件以 `MMMD` 开头（Mobile Music Data），与 Yamaha 参考文件格式一致
 
 ### 错误码汇总
 
@@ -509,7 +546,7 @@ uint32_t result = CnvTo(params);
 | DLL加载函数分析 | `tools/yamaha_converter/ghidra_output/cnvto_usage_analysis.txt` |
 | DLL 文件副本 | `tools/yamaha_converter/ghidra_dlls/` |
 | 导入+导出批处理 | `tools/yamaha_converter/run_import_export.bat` |
-| midi2mmf 测试程序 (v9) | `tools/yamaha_converter/midi2mmf.c` |
+| midi2mmf 转换器 (v10) | `tools/yamaha_converter/midi2mmf.c` |
 
 ## 另见
 

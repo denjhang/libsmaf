@@ -1,16 +1,20 @@
 /**
- * MIDI to SMAF/MMF Converter v9
+ * MIDI to SMAF/MMF Converter v10
  *
- * Strategy: Call CnvMA3SMF.dll's CnvTo directly (skip Ssd_Parser.dll crash).
+ * Two-stage pipeline matching sscma3.dll:
+ *   Stage 1: CnvMA3SMF.dll::CnvTo   (ordinal 2) — SMF → processed SMF
+ *   Stage 2: CnvMA3SMAF_SC.dll::CnvTo (ordinal 3) — processed SMF → MMF (MMMD format)
  *
- * CnvTo struct: uint param_1[5]
+ * CnvTo param struct: uint param_1[5]
  *   [0] = flags (set to 0)
- *   [1] = SMF data pointer
- *   [2] = SMF data size
+ *   [1] = input data pointer
+ *   [2] = input data size
  *   [3] = output buffer pointer
- *   [4] = output buffer size
+ *   [4] = output buffer size (in) / actual size written (out)
  *
- * Also try CnvMA3SMAF_SC.dll for post-processing.
+ * Error codes:
+ *   0x80000001 = output buffer too small
+ *   0x80000002 = invalid input format
  *
  * Build (32-bit): i686-w64-mingw32-gcc -o midi2mmf.exe midi2mmf.c -lshlwapi
  */
@@ -53,6 +57,68 @@ static void hexdump(const char* label, const void* data, int len) {
     printf("\n");
 }
 
+typedef uint32_t (__cdecl *CnvTo_t)(uint32_t* param_1);
+
+static int call_cnvtos(CnvTo_t pCnvTo, uint8_t* in_data, int in_size,
+                       uint8_t** out_data, int* out_size, const char* stage_name) {
+    int buf_size = in_size * 4;
+    if (buf_size < 262144) buf_size = 262144;
+    uint8_t* buf = (uint8_t*)malloc(buf_size);
+    if (!buf) return -1;
+    memset(buf, 0, buf_size);
+
+    uint32_t params[5];
+    params[0] = 0;
+    params[1] = (uint32_t)(uintptr_t)in_data;
+    params[2] = (uint32_t)in_size;
+    params[3] = (uint32_t)(uintptr_t)buf;
+    params[4] = (uint32_t)buf_size;
+
+    printf("  [%s] Calling CnvTo: in=%p(%d), out=%p(%d)\n",
+           stage_name, in_data, in_size, buf, buf_size);
+
+    uint32_t result = pCnvTo(params);
+    printf("  [%s] Result: 0x%08X\n", stage_name, result);
+
+    if ((result & 0x80000000) == 0) {
+        int actual = (int)params[4];
+        printf("  [%s] Output: %d bytes\n", stage_name, actual);
+        hexdump(stage_name, buf, actual);
+        *out_data = buf;
+        *out_size = actual;
+        return 0;
+    }
+
+    if (result == 0x80000001) {
+        /* Buffer too small — params[4] contains required size */
+        int need = (int)params[4];
+        printf("  [%s] Buffer too small, need %d bytes\n", stage_name, need);
+        free(buf);
+        buf = (uint8_t*)malloc(need + 4096);
+        if (!buf) return -1;
+        memset(buf, 0, need + 4096);
+        params[3] = (uint32_t)(uintptr_t)buf;
+        params[4] = (uint32_t)(need + 4096);
+
+        printf("  [%s] Retrying with %d byte buffer...\n", stage_name, need + 4096);
+        result = pCnvTo(params);
+        printf("  [%s] Result: 0x%08X, actual size: %u\n", stage_name, result, params[4]);
+
+        if ((result & 0x80000000) == 0) {
+            *out_data = buf;
+            *out_size = (int)params[4];
+            return 0;
+        }
+        free(buf);
+        fprintf(stderr, "  [%s] Retry failed: 0x%08X\n", stage_name, result);
+        return -1;
+    }
+
+    fprintf(stderr, "  [%s] Error: 0x%08X\n", stage_name, result);
+    free(buf);
+    return -1;
+}
+
 int main(int argc, char* argv[]) {
     if (argc < 3) { printf("Usage: %s <input.mid> <output.mmf>\n", argv[0]); return 1; }
 
@@ -61,110 +127,83 @@ int main(int argc, char* argv[]) {
     uint8_t* midi_data = read_file(midi_path, &midi_size);
     if (!midi_data) { fprintf(stderr, "Cannot read %s\n", midi_path); return 1; }
     printf("Input: %s (%d bytes)\n", midi_path, midi_size);
-    hexdump("Header", midi_data, 16);
+    hexdump("MIDI Header", midi_data, 16);
 
-    /* === Direct CnvMA3SMF.dll CnvTo call === */
-    printf("\n=== Loading CnvMA3SMF.dll ===\n");
+    /* === Stage 1: CnvMA3SMF.dll::CnvTo (ordinal 2) — SMF → processed SMF === */
+    printf("\n=== Stage 1: CnvMA3SMF.dll ===\n");
     HMODULE hCnv = LoadLibraryA("CnvMA3SMF.dll");
     if (!hCnv) {
         fprintf(stderr, "Cannot load CnvMA3SMF.dll (Error: %lu)\n", GetLastError());
+        free(midi_data);
         return 1;
     }
 
-    /* CnvTo is exported by ordinal 2 */
-    typedef uint32_t (__cdecl *CnvTo_t)(uint32_t* param_1);
-    /* Also try by name */
-    CnvTo_t pCnvTo = (CnvTo_t)GetProcAddress(hCnv, "CnvTo");
-    if (!pCnvTo) {
-        /* Try by ordinal */
-        pCnvTo = (CnvTo_t)GetProcAddress(hCnv, (LPCSTR)2);
+    CnvTo_t pCnvTo1 = (CnvTo_t)GetProcAddress(hCnv, "CnvTo");
+    if (!pCnvTo1) pCnvTo1 = (CnvTo_t)GetProcAddress(hCnv, MAKEINTRESOURCEA(2));
+    if (!pCnvTo1) {
+        fprintf(stderr, "Cannot find CnvTo in CnvMA3SMF.dll\n");
+        FreeLibrary(hCnv);
+        free(midi_data);
+        return 1;
     }
-    if (!pCnvTo) {
-        /* Enumerate exports */
-        printf("  CnvTo not found by name or ordinal 2, trying to enumerate...\n");
-        /* On 32-bit Windows, GetProcAddress with ordinal uses (LPCSTR)ordinal */
-        /* The ordinal value is passed as the low word of the string pointer */
-        pCnvTo = (CnvTo_t)GetProcAddress(hCnv, MAKEINTRESOURCEA(2));
+    printf("  CnvTo = %p\n", pCnvTo1);
+
+    uint8_t* stage1_out = NULL;
+    int stage1_size = 0;
+    if (call_cnvtos(pCnvTo1, midi_data, midi_size, &stage1_out, &stage1_size, "Stage1") != 0) {
+        fprintf(stderr, "Stage 1 failed\n");
+        FreeLibrary(hCnv);
+        free(midi_data);
+        return 1;
     }
-    printf("  pCnvTo = %p\n", pCnvTo);
-
-    if (pCnvTo) {
-        /* Allocate output buffer (4x input size, minimum 256KB) */
-        int out_size = midi_size * 4;
-        if (out_size < 262144) out_size = 262144;
-        uint8_t* out_buf = (uint8_t*)malloc(out_size);
-        memset(out_buf, 0, out_size);
-
-        uint32_t params[5];
-        params[0] = 0;                         /* flags */
-        params[1] = (uint32_t)(uintptr_t)midi_data; /* SMF data ptr */
-        params[2] = (uint32_t)midi_size;        /* SMF data size */
-        params[3] = (uint32_t)(uintptr_t)out_buf;  /* output buffer ptr */
-        params[4] = (uint32_t)out_size;         /* output buffer size */
-
-        printf("  Calling CnvTo: flags=0, in=%p(%d), out=%p(%d)\n",
-               midi_data, midi_size, out_buf, out_size);
-
-        uint32_t result = pCnvTo(params);
-        printf("  Result: 0x%08X\n", result);
-        printf("  params[4] after call: %u (actual output size)\n", params[4]);
-
-        if ((result & 0x80000000) == 0) {
-            /* Success - check output */
-            int actual_size = (int)params[4];
-            if (actual_size > 0 && actual_size <= out_size) {
-                printf("  Output: %d bytes\n", actual_size);
-                hexdump("SMAF", out_buf, actual_size);
-
-                if (out_buf[0] == '#' && out_buf[1] == '#' && out_buf[2] == '#') {
-                    printf("  >>> SMAF header detected! Saving to %s\n", mmf_path);
-                    write_file(mmf_path, out_buf, actual_size);
-                } else {
-                    printf("  No SMAF header (expected '###SMAF'), saving anyway\n");
-                    write_file(mmf_path, out_buf, actual_size);
-                }
-            }
-        } else if (result == 0x80000001) {
-            fprintf(stderr, "  Error: 0x80000001 = output buffer too small\n");
-            fprintf(stderr, "  Need at least %u bytes, had %d\n", params[4], out_size);
-            /* Retry with larger buffer */
-            int new_size = (int)params[4] + 4096;
-            uint8_t* new_buf = (uint8_t*)malloc(new_size);
-            memset(new_buf, 0, new_size);
-            params[3] = (uint32_t)(uintptr_t)new_buf;
-            params[4] = (uint32_t)new_size;
-            printf("  Retrying with %d byte buffer...\n", new_size);
-            result = pCnvTo(params);
-            printf("  Result: 0x%08X, actual size: %u\n", result, params[4]);
-            if ((result & 0x80000000) == 0) {
-                hexdump("SMAF", new_buf, (int)params[4]);
-                write_file(mmf_path, new_buf, (int)params[4]);
-                printf("  Saved to %s\n", mmf_path);
-            }
-            free(new_buf);
-        } else {
-            fprintf(stderr, "  Error: 0x%08X\n", result);
-        }
-        free(out_buf);
-    }
-
-    /* === Also try via CnvMA3SMAF_SC.dll === */
-    printf("\n=== Loading CnvMA3SMAF_SC.DLL ===\n");
-    HMODULE hSc = LoadLibraryA("CnvMA3SMAF_SC.DLL");
-    if (hSc) {
-        printf("  Loaded successfully\n");
-        /* Check exports */
-        FARPROC p1 = GetProcAddress(hSc, "CnvFrom");
-        FARPROC p2 = GetProcAddress(hSc, "CnvTo");
-        FARPROC p3 = GetProcAddress(hSc, MAKEINTRESOURCEA(1));
-        FARPROC p4 = GetProcAddress(hSc, MAKEINTRESOURCEA(2));
-        printf("  CnvFrom=%p CnvTo=%p Ord1=%p Ord2=%p\n", p1, p2, p3, p4);
-    } else {
-        printf("  Cannot load: %lu\n", GetLastError());
-    }
-
     FreeLibrary(hCnv);
-    if (hSc) FreeLibrary(hSc);
+
+    /* Verify stage 1 output */
+    if (stage1_size >= 4 && stage1_out[0] == 'M' && stage1_out[1] == 'T' &&
+        stage1_out[2] == 'h' && stage1_out[3] == 'd') {
+        printf("  Stage 1: Valid MThd output confirmed\n");
+    } else {
+        printf("  Stage 1: Warning — output doesn't start with MThd\n");
+    }
+
+    /* === Stage 2: CnvMA3SMAF_SC.dll::CnvTo (ordinal 3) — processed SMF → SMAF === */
+    printf("\n=== Stage 2: CnvMA3SMAF_SC.dll ===\n");
+    HMODULE hSc = LoadLibraryA("CnvMA3SMAF_SC.DLL");
+    if (!hSc) {
+        fprintf(stderr, "Cannot load CnvMA3SMAF_SC.DLL (Error: %lu)\n", GetLastError());
+        /* Save stage 1 output as fallback */
+        printf("  Saving stage 1 (processed SMF) output as fallback\n");
+        write_file(mmf_path, stage1_out, stage1_size);
+        free(stage1_out);
+        free(midi_data);
+        return 1;
+    }
+
+    /* CnvTo is ordinal 3 in CnvMA3SMAF_SC.dll (ordinal 1=GetMAxVersion, 2=CnvFrom) */
+    CnvTo_t pCnvTo2 = (CnvTo_t)GetProcAddress(hSc, "CnvTo");
+    if (!pCnvTo2) pCnvTo2 = (CnvTo_t)GetProcAddress(hSc, MAKEINTRESOURCEA(3));
+    printf("  CnvTo = %p\n", pCnvTo2);
+
+    uint8_t* stage2_out = NULL;
+    int stage2_size = 0;
+    if (pCnvTo2 && call_cnvtos(pCnvTo2, stage1_out, stage1_size, &stage2_out, &stage2_size, "Stage2") == 0) {
+        /* Check for MMMD header (Mobile Music Data) */
+        if (stage2_size >= 4 && stage2_out[0] == 'M' && stage2_out[1] == 'M' &&
+            stage2_out[2] == 'M' && stage2_out[3] == 'D') {
+            printf("  >>> MMMD header detected! Saving to %s\n", mmf_path);
+        } else {
+            printf("  No MMMD header detected, saving anyway\n");
+        }
+        write_file(mmf_path, stage2_out, stage2_size);
+        printf("  Saved: %s (%d bytes)\n", mmf_path, stage2_size);
+        free(stage2_out);
+    } else {
+        fprintf(stderr, "Stage 2 failed, saving stage 1 output as fallback\n");
+        write_file(mmf_path, stage1_out, stage1_size);
+    }
+
+    FreeLibrary(hSc);
+    free(stage1_out);
     free(midi_data);
     return 0;
 }
